@@ -1,10 +1,11 @@
 let input_key_buffer = [];//キー入力
-for(let i = 0; i < 4; i++) input_key_buffer[i] = false;//押してない状態を初期値とする
+for(let i = 0; i < 256; i++) input_key_buffer[i] = false;//押してない状態を初期値とする
 const canvas = document.getElementById('action');
 let ctx = canvas.getContext('2d');
-let x = 90;
-let y = 90;
-let oku = 0.5;
+let x = 45;
+let y = 45;
+let z = 300;
+const oku = 0.4;
 let data = [];
 let face = [];
 let re = [];
@@ -15,23 +16,43 @@ const rndm = (min,max) => {
 const rad = dir => {
 	return dir * Math.PI/180;
 }
-const goto = obj => {
-	let xx = Math.cos(rad(y)) * obj.x + Math.sin(rad(y)) * obj.z;
-	let yy = Math.cos(rad(x)) * obj.y - Math.sin(rad(x)) * (Math.cos(rad(y)) * obj.z - Math.sin(rad(y)) * obj.x);
-	let zz = Math.sin(rad(x))*obj.y*oku + Math.cos(rad(x))* ( Math.cos(rad(y)) * obj.z*oku - Math.sin(rad(y))*obj.x*oku ) + 300;
+const dot = (mat1,mat2) => {
+	let re = [];
+	mat1.forEach((v1,i1)=> {
+		re.push([]);
+		mat2[0].forEach((v2,i2)=> {
+			re[i1].push(0);
+			mat1[0].forEach((v3,i3)=> {
+				re[i1][i2] += mat1[i1][i3]*mat2[i3][i2];
+			})	
+		})
+	})
+	return re;
+}
+const vect = (obj1,obj2,obj3) => {
+	const xx = (obj1.y*obj2.z + obj2.y*obj3.z + obj3.y*obj1.z) - (obj2.y*obj1.z + obj3.y*obj2.z + obj1.y*obj3.z);
+	const yy = (obj1.z*obj2.x + obj2.z*obj3.x + obj3.z*obj1.x) - (obj2.z*obj1.x + obj3.z*obj2.x + obj1.z*obj3.x);
+	const zz = (obj1.x*obj2.y + obj2.x*obj3.y + obj3.x*obj1.y) - (obj2.x*obj1.y + obj3.x*obj2.y + obj1.x*obj3.y);
 	return {x:xx,y:yy,z:zz};
 }
+console.log(vect( {x:1,y:2,z:3}, {x:2,y:3,z:1}, {x:-1,y:1,z:4}))
+const goto = obj => {
+	const rx = dot([[obj.x,obj.y,obj.z]],[[Math.cos(rad(y))],[0],[Math.sin(rad(y))]]);
+	const ry = dot([[obj.x,obj.y,obj.z]],[ [Math.sin(rad(x))*Math.sin(rad(y)) ], [Math.cos(rad(x))],[ Math.sin(rad(x))*Math.cos(rad(y))*-1 ] ] );
+	const rz = dot( [[obj.x,obj.y,obj.z]],[ [Math.sin(rad(y))*Math.cos(rad(x))*-1*oku],[Math.sin(rad(x))*oku],[Math.cos(rad(x))*Math.cos(rad(y))*oku] ]);
+	return {x:rx[0][0],y:ry[0][0],z:rz[0][0]+z};
+}
 const  heron = (a,b,c) => {
-	let s = (a + b + c)/2;
+	const s = (a + b + c)/2;
 	return Math.sqrt(s*(s-a)*(s-b)*(s-c));
 }
 const fillTriangle = (obj1,obj2,obj3,cl) => {
-	let length = {
+	const length = {
 		l3:Math.sqrt(Math.pow(obj1.x-obj2.x,2) + Math.pow(obj1.y-obj2.y,2)),
 		l2:Math.sqrt(Math.pow(obj1.x-obj3.x,2) + Math.pow(obj1.y-obj3.y,2)),
 		l1:Math.sqrt(Math.pow(obj2.x-obj3.x,2) + Math.pow(obj2.y-obj3.y,2)),
 	}
-	let innerCenter = {
+	const innerCenter = {
 		x:(length.l1*obj1.x+length.l2*obj2.x+length.l3*obj3.x)/(length.l1+length.l2+length.l3),
 		y:(length.l1*obj1.y+length.l2*obj2.y+length.l3*obj3.y)/(length.l1+length.l2+length.l3),
 	}
@@ -61,7 +82,6 @@ const fillTriangle = (obj1,obj2,obj3,cl) => {
 const fillSquare = (obj1,obj2,obj3,obj4,cl) => {
 	fillTriangle({x:obj1.x,y:obj1.y},{x:obj2.x,y:obj2.y},{x:obj3.x,y:obj3.y},cl);
 	fillTriangle({x:obj1.x,y:obj1.y},{x:obj3.x,y:obj3.y},{x:obj4.x,y:obj4.y},cl);
-
 }
 const addData = obj => {
 	data.push(obj);
@@ -73,7 +93,7 @@ const drawPoint = () => {
 	ctx.moveTo(r.x/r.z*200 + 320,r.y/r.z*200 + 240);
 	ctx.lineWidth = 3;
 	ctx.fillStyle = "#bbb";
-	data.forEach(function(value,index,array) {
+	data.forEach((value,index,array) => {
 		r = goto(value);
 		ctx.arc(r.x/r.z*200 + 320,r.y/r.z*200 + 240,5,0,Math.PI*2,false);
 		point && ctx.fill();
@@ -85,7 +105,7 @@ const drawFace = () => {
 	let zz = [];
 	face.forEach((value,index,array) => {
 		let r = 0;
-		let v = value['p'];
+		let v = JSON.parse(JSON.stringify(value['p']));
 		v.forEach((value,index) => {
 			r += re[v[index]]['z'];
  		})
@@ -100,16 +120,21 @@ const drawFace = () => {
 			}
 		}
 	});
+	//console.log(zz);
 	face.forEach((value,i) => {
-		let cl = face[zz[i]['index']]['cl'];
-		console.log(zz[i]['index'],face[zz[i]['index']]['cl'],cl);
-		let temp = face[zz[i]['index']]['p'];
-		fillSquare(re[temp[0]],re[temp[1]],re[temp[2]],re[temp[3]],cl);
+		let obj = JSON.parse(JSON.stringify(face[zz[i]['index']]));
+		switch(obj.type) {
+			default:
+			fillSquare(re[obj.p[0]],re[obj.p[1]],re[obj.p[2]],re[obj.p[3]],obj.cl);
+			break;
+			case "triangle":
+			fillTriangle(re[obj.p[0]],re[obj.p[1]],re[obj.p[2]],obj.cl);
+			break
+		}
 	});
-	console.log(face);
 }
-const addFace = (obj,color) => {
-	face.push({p:obj,cl:color});
+const addFace = (obj,color,type = "square") => {
+	face.push({p:obj,cl:color,type:type});
 }
 const cubeData = () => {
 	addData({x:100,y:100,z:-100});
@@ -120,12 +145,23 @@ const cubeData = () => {
 	addData({x:100,y:-100,z:100});
 	addData({x:-100,y:-100,z:100});
 	addData({x:-100,y:100,z:100});
-	addFace([0,1,2,3],'#00f');
-	addFace([2,3,7,6],'#0f0');	
+	addData({x:0,y:300,z:0});
+	addData({x:-100,y:300,z:-100});
+	addFace([0,1,2],'#00f',"triangle");
+	addFace([2,3,7,6],'#0f0');
 	addFace([0,1,5,4],'#0ff');
 	addFace([1,2,6,5],'#f0f');
-	addFace([4,5,6,7],'#ff0');	
+	addFace([4,5,6,7],'#ff0');
 	addFace([0,3,7,4],'#f00');
+	addFace([8,0,3],'#888',"triangle");
+	addFace([8,0,4],'#777',"triangle");
+	addFace([8,4,7],'#666',"triangle");
+	addFace([8,3,7],'#555',"triangle");
+	addFace([9,3,0],'#555',"triangle");
+}
+const sleep = waitMsec => {
+	const startMsec = new Date();
+	while(new Date() - startMsec < waitMsec);
 }
 const all = () => {
 	ctx.beginPath();
@@ -133,18 +169,19 @@ const all = () => {
 	ctx.fillStyle = '#000000';
 	ctx.fillRect(0,0,canvas.width,canvas.height);
 	ctx.closePath();
-	window.onkeydown =function (e){
-		input_key_buffer[e.keyCode-37] = true;
-		e.keyCode == 90 && (point = true);
-	};
-	window.onkeyup = function (e){
-		input_key_buffer[e.keyCode-37] = false;
-		e.keyCode == 90 && (point = false);
-	};
-	y += 3*(input_key_buffer[2] - input_key_buffer[0]);
- 	x += 3*(input_key_buffer[3] - input_key_buffer[1]);
+	window.onkeydown = e => {
+		input_key_buffer[e.keyCode] = true;
+	}
+	window.onkeyup = e => {
+		input_key_buffer[e.keyCode] = false;
+	}
+	y += 3*(input_key_buffer[39] - input_key_buffer[37]);
+ 	x += 3*(input_key_buffer[40] - input_key_buffer[38]);
+	point = input_key_buffer[90];
+	z += 2*(input_key_buffer[83] - input_key_buffer[87]);
  	drawPoint();
  	drawFace();
+	input_key_buffer[83] && input_key_buffer[84] && sleep(100000);
 }
 cubeData();
 (function animloop() {
